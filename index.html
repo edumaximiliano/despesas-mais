@@ -917,11 +917,22 @@ input[type="file"] { display: none; }
         </div>
       </div>
 
+      <div class="field">
+        <label>Observações (opcional)</label>
+        <textarea id="exportObs" rows="3" placeholder="Ex.: viagem técnica a cliente, reembolso de pedágios, etc."
+          style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid var(--line,#e8e3d8); border-radius:12px; font:inherit; resize:vertical; background:var(--surface,#fff); color:var(--ink,#1a1d1f);"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Nome do gestor (opcional, aparece na assinatura)</label>
+        <input type="text" id="exportGestor" placeholder="Ex.: Eduardo Maximiliano">
+      </div>
+
       <div class="export-option" onclick="exportPDF()">
         <div class="export-icon">📄</div>
         <div class="export-info">
           <div class="export-title">PDF</div>
-          <div class="export-sub">Relatório formatado com logo, tabela e recibos</div>
+          <div class="export-sub">Relatório formatado com logo, tabela, assinaturas e recibos</div>
         </div>
       </div>
 
@@ -930,6 +941,14 @@ input[type="file"] { display: none; }
         <div class="export-info">
           <div class="export-title">Excel (.xlsx)</div>
           <div class="export-sub">Planilha com todas as despesas e totais</div>
+        </div>
+      </div>
+
+      <div class="export-option" onclick="sendForApproval()">
+        <div class="export-icon">📤</div>
+        <div class="export-info">
+          <div class="export-title">Enviar para aprovação</div>
+          <div class="export-sub">Envia o PDF ao gestor por e-mail; após aprovação, encaminha automaticamente</div>
         </div>
       </div>
     </div>
@@ -978,6 +997,14 @@ input[type="file"] { display: none; }
         <div class="setting-info">
           <div class="setting-title">Chave OCR.space</div>
           <div class="setting-sub" id="ocrStatus">Usando chave gratuita padrão</div>
+        </div>
+      </div>
+
+      <div class="setting-item" onclick="configApprovalUrl()">
+        <div class="setting-icon">📤</div>
+        <div class="setting-info">
+          <div class="setting-title">Webhook de aprovação</div>
+          <div class="setting-sub" id="approvalStatus">Não configurado</div>
         </div>
       </div>
 
@@ -1537,9 +1564,16 @@ function getExportRange() {
   return { from, to, items };
 }
 
-async function exportPDF() {
+// Constrói o relatório em PDF e devolve { doc, from, to, items, total, fname, observacoes }.
+// Não salva nem fecha modal — quem chama decide (salvar, enviar, etc.). Retorna null se vazio.
+async function buildReportPDF() {
   const { from, to, items } = getExportRange();
-  if (items.length === 0) { toast('Nenhuma despesa no período', true); return; }
+  if (items.length === 0) { toast('Nenhuma despesa no período', true); return null; }
+
+  const obsEl = document.getElementById('exportObs');
+  const gestorEl = document.getElementById('exportGestor');
+  const observacoes = obsEl ? obsEl.value.trim() : '';
+  const gestorNome = gestorEl ? gestorEl.value.trim() : '';
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -1563,7 +1597,7 @@ async function exportPDF() {
   doc.text(periodTxt, pageW - margin, 26, { align: 'right' });
   const userTxt = currentUser ? (currentUser.email ? `${currentUser.name} • ${currentUser.email}` : currentUser.name) : '';
   if (userTxt) doc.text(userTxt, pageW - margin, 30, { align: 'right' });
-  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW - margin, 34, { align: 'right' });
+  doc.text(`Emitido em ${new Date().toLocaleDateString('pt-BR')}`, pageW - margin, 34, { align: 'right' });
 
   // Linha separadora vermelha
   doc.setDrawColor(200, 16, 46);
@@ -1654,6 +1688,68 @@ async function exportPDF() {
   doc.setTextColor(200, 16, 46);
   doc.text(`R$ ${fmtMoney(total)}`, pageW - margin, y, { align: 'right' });
 
+  // ===== Observações =====
+  y += 14;
+  const ensureSpace = (need) => {
+    if (y + need > 285) {
+      doc.addPage();
+      try { doc.addImage(LOGO_URL, 'PNG', margin, 10, 24, 12, undefined, 'FAST'); } catch (er) {}
+      doc.setDrawColor(200, 16, 46);
+      doc.setLineWidth(0.4);
+      doc.line(margin, 24, pageW - margin, 24);
+      y = 34;
+    }
+  };
+
+  if (observacoes) {
+    ensureSpace(30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(26, 29, 31);
+    doc.text('OBSERVAÇÕES', margin, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    const lines = doc.splitTextToSize(observacoes, pageW - 2 * margin);
+    for (const ln of lines) {
+      ensureSpace(6);
+      doc.text(ln, margin, y);
+      y += 5;
+    }
+    y += 6;
+  }
+
+  // ===== Data de emissão + Assinaturas =====
+  ensureSpace(46);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Data de emissão: ${new Date().toLocaleDateString('pt-BR')}`, margin, y);
+  y += 16;
+
+  const colW = 75;
+  const leftX = margin;
+  const rightX = pageW - margin - colW;
+  const lineY = y;
+  doc.setDrawColor(120, 120, 120);
+  doc.setLineWidth(0.3);
+  doc.line(leftX, lineY, leftX + colW, lineY);
+  doc.line(rightX, lineY, rightX + colW, lineY);
+  y += 5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(26, 29, 31);
+  const respNome = currentUser ? currentUser.name : '';
+  doc.text(respNome || 'Responsável', leftX, y);
+  doc.text(gestorNome || 'Gestor', rightX, y);
+  y += 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text('Responsável pela prestação de contas', leftX, y);
+  doc.text('Aprovação do gestor', rightX, y);
+
   // Anexar recibos em páginas separadas
   const withPhotos = items.filter(e => e.photo);
   if (withPhotos.length > 0) {
@@ -1713,9 +1809,72 @@ async function exportPDF() {
 
   const safeName = currentUser ? currentUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'mais';
   const fname = `Despesas_${safeName}_${(from || 'inicio').replace(/-/g,'')}_${(to || 'fim').replace(/-/g,'')}.pdf`;
-  doc.save(fname);
+  return { doc, from, to, items, total, fname, observacoes };
+}
+
+// Salva o PDF localmente (download)
+async function exportPDF() {
+  const r = await buildReportPDF();
+  if (!r) return;
+  r.doc.save(r.fname);
   closeModal('modalExport');
   toast('PDF gerado');
+}
+
+// Envia o relatório ao gestor para aprovação (via backend Apps Script)
+async function sendForApproval() {
+  const url = await dbGetConfig('approvalUrl');
+  if (!url) {
+    toast('Configure a URL de aprovação em Ajustes', true);
+    return;
+  }
+  const r = await buildReportPDF();
+  if (!r) return;
+
+  toast('Gerando e enviando…');
+  let pdfBase64;
+  try {
+    // datauristring -> remove o prefixo "data:application/pdf;base64,"
+    const dataUri = r.doc.output('datauristring');
+    pdfBase64 = dataUri.substring(dataUri.indexOf(',') + 1);
+  } catch (e) {
+    toast('Falha ao gerar o PDF', true);
+    return;
+  }
+
+  const payload = {
+    pdfBase64,
+    filename: r.fname,
+    requesterName: currentUser ? currentUser.name : '',
+    requesterEmail: currentUser ? (currentUser.email || '') : '',
+    period: `${r.from ? fmtDate(r.from) : '—'} a ${r.to ? fmtDate(r.to) : '—'}`,
+    total: fmtMoney(r.total),
+    count: r.items.length,
+    observacoes: r.observacoes || ''
+  };
+
+  try {
+    // text/plain evita preflight CORS no Apps Script (simple request)
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    let ok = resp.ok;
+    try {
+      const j = await resp.json();
+      ok = ok && j && j.ok !== false;
+    } catch (_) { /* resposta pode ser opaca; assume envio */ }
+    if (ok) {
+      closeModal('modalExport');
+      toast('Relatório enviado ao gestor para aprovação');
+    } else {
+      toast('Servidor recusou o envio. Verifique a URL.', true);
+    }
+  } catch (e) {
+    console.warn('Falha no envio:', e);
+    toast('Não foi possível enviar. Verifique a URL/conexão.', true);
+  }
 }
 
 async function exportExcel() {
@@ -1804,7 +1963,29 @@ function openSettings() {
       ? 'Chave personalizada configurada'
       : 'Usando chave gratuita padrão (limitada)';
   });
+  dbGetConfig('approvalUrl').then(u => {
+    const el = document.getElementById('approvalStatus');
+    if (el) el.textContent = u ? 'Configurado ✓' : 'Não configurado';
+  });
   openModal('modalSettings');
+}
+
+async function configApprovalUrl() {
+  const current = await dbGetConfig('approvalUrl') || '';
+  const url = prompt('Cole a URL do app da Web do Apps Script (termina em /exec). Deixe em branco para remover:', current);
+  if (url === null) return;
+  const v = url.trim();
+  if (v === '') {
+    await dbSetConfig('approvalUrl', '');
+    toast('Webhook removido');
+  } else if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) {
+    toast('URL inválida. Deve terminar em /exec', true);
+    return;
+  } else {
+    await dbSetConfig('approvalUrl', v);
+    toast('Webhook salvo');
+  }
+  openSettings();
 }
 
 async function configOCR() {
