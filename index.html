@@ -422,6 +422,45 @@ body {
   position: relative;
   overflow: hidden;
 }
+.gallery-btn {
+  width: 100%;
+  margin: -8px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.gallery-btn:active { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+
+/* Botão de limpar (x) dentro dos campos */
+.input-wrap { position: relative; }
+.input-wrap > input,
+.input-wrap > textarea { padding-right: 40px; }
+.input-clear {
+  position: absolute;
+  right: 8px;
+  top: 13px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+  display: none;
+}
+.input-clear:active { background: var(--brand); color: #fff; }
+.input-wrap > input:not(:placeholder-shown) + .input-clear,
+.input-wrap > textarea:not(:placeholder-shown) + .input-clear { display: block; }
 .photo-area:active { background: var(--brand-soft); border-color: var(--brand); }
 .photo-area.has-image { padding: 0; border-style: solid; border-color: var(--line); }
 .photo-area img.receipt { width: 100%; display: block; max-height: 320px; object-fit: contain; background: #f0eee9; }
@@ -849,16 +888,26 @@ input[type="file"] { display: none; }
         <div class="photo-sub">Vamos extrair valor, data e estabelecimento automaticamente</div>
       </div>
       <input type="file" id="photoInput" accept="image/*" capture="environment" onchange="handlePhoto(event)">
+      <input type="file" id="photoInputGallery" accept="image/*" onchange="handlePhoto(event)">
+      <button type="button" class="gallery-btn" onclick="document.getElementById('photoInputGallery').click()">
+        🖼️ Escolher da galeria (print ou foto salva)
+      </button>
 
       <div class="field">
         <label>Estabelecimento</label>
-        <input type="text" id="fMerchant" placeholder="Ex: Posto Shell, Restaurante...">
+        <div class="input-wrap">
+          <input type="text" id="fMerchant" placeholder="Ex: Posto Shell, Restaurante...">
+          <button type="button" class="input-clear" tabindex="-1" onclick="clearField(this)" aria-label="Limpar">×</button>
+        </div>
       </div>
 
       <div class="field-row">
         <div class="field">
           <label>Valor (R$)</label>
-          <input type="number" id="fAmount" step="0.01" placeholder="0,00" inputmode="decimal">
+          <div class="input-wrap">
+            <input type="number" id="fAmount" step="0.01" placeholder="0,00" inputmode="decimal">
+            <button type="button" class="input-clear" tabindex="-1" onclick="clearField(this)" aria-label="Limpar">×</button>
+          </div>
         </div>
         <div class="field">
           <label>Data</label>
@@ -874,19 +923,28 @@ input[type="file"] { display: none; }
       <div class="field-row">
         <div class="field">
           <label>Viagem (opcional)</label>
-          <input type="text" id="fTrip" list="tripList" placeholder="Ex: Cliente X – SP">
-          <datalist id="tripList"></datalist>
+          <div class="input-wrap">
+            <input type="text" id="fTrip" list="tripList" placeholder="Ex: Cliente X – SP">
+            <button type="button" class="input-clear" tabindex="-1" onclick="clearField(this)" aria-label="Limpar">×</button>
+            <datalist id="tripList"></datalist>
+          </div>
         </div>
         <div class="field">
           <label>Projeto (opcional)</label>
-          <input type="text" id="fProject" list="projectList" placeholder="Ex: Subestação Contagem">
-          <datalist id="projectList"></datalist>
+          <div class="input-wrap">
+            <input type="text" id="fProject" list="projectList" placeholder="Ex: Subestação Contagem">
+            <button type="button" class="input-clear" tabindex="-1" onclick="clearField(this)" aria-label="Limpar">×</button>
+            <datalist id="projectList"></datalist>
+          </div>
         </div>
       </div>
 
       <div class="field">
         <label>Observações (opcional)</label>
-        <textarea id="fNotes" placeholder="Notas sobre a despesa..."></textarea>
+        <div class="input-wrap">
+          <textarea id="fNotes" placeholder="Notas sobre a despesa..."></textarea>
+          <button type="button" class="input-clear" tabindex="-1" onclick="clearField(this)" aria-label="Limpar">×</button>
+        </div>
       </div>
 
       <button class="btn-primary" onclick="saveExpense()">Salvar despesa</button>
@@ -1359,6 +1417,14 @@ function renderCatGrid() {
 function selectCat(id) {
   selectedCat = id;
   renderCatGrid();
+}
+
+// Limpa rapidamente um campo (botão "×")
+function clearField(btn) {
+  const el = btn.parentElement.querySelector('input, textarea');
+  if (!el) return;
+  el.value = '';
+  el.focus();
 }
 
 function resetPhotoArea() {
