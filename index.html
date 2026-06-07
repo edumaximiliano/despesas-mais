@@ -870,6 +870,19 @@ input[type="file"] { display: none; }
         <div class="cat-grid" id="catGrid"></div>
       </div>
 
+      <div class="field-row">
+        <div class="field">
+          <label>Viagem (opcional)</label>
+          <input type="text" id="fTrip" list="tripList" placeholder="Ex: Cliente X – SP">
+          <datalist id="tripList"></datalist>
+        </div>
+        <div class="field">
+          <label>Projeto (opcional)</label>
+          <input type="text" id="fProject" list="projectList" placeholder="Ex: Subestação Contagem">
+          <datalist id="projectList"></datalist>
+        </div>
+      </div>
+
       <div class="field">
         <label>Observações (opcional)</label>
         <textarea id="fNotes" placeholder="Notas sobre a despesa..."></textarea>
@@ -906,14 +919,59 @@ input[type="file"] { display: none; }
       <div class="sheet-sub">Gere um relatório com a logo da MAIS</div>
     </div>
     <div class="sheet-body">
-      <div class="field-row">
-        <div class="field">
-          <label>De</label>
-          <input type="date" id="exportFrom">
+      <div class="field">
+        <label>Tipo de relatório</label>
+        <select id="exportScope" onchange="onScopeChange()"
+          style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid var(--line); border-radius:12px; font:inherit; background:var(--surface); color:var(--ink);">
+          <option value="period">Período específico</option>
+          <option value="month">Mensal</option>
+          <option value="year">Anual</option>
+          <option value="trip">Por viagem</option>
+          <option value="project">Por projeto</option>
+        </select>
+      </div>
+
+      <div id="scope-period">
+        <div class="field-row">
+          <div class="field">
+            <label>De</label>
+            <input type="date" id="exportFrom">
+          </div>
+          <div class="field">
+            <label>Até</label>
+            <input type="date" id="exportTo">
+          </div>
         </div>
+      </div>
+
+      <div id="scope-month" style="display:none">
         <div class="field">
-          <label>Até</label>
-          <input type="date" id="exportTo">
+          <label>Mês</label>
+          <input type="month" id="exportMonth">
+        </div>
+      </div>
+
+      <div id="scope-year" style="display:none">
+        <div class="field">
+          <label>Ano</label>
+          <select id="exportYear"
+            style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid var(--line); border-radius:12px; font:inherit; background:var(--surface); color:var(--ink);"></select>
+        </div>
+      </div>
+
+      <div id="scope-trip" style="display:none">
+        <div class="field">
+          <label>Viagem</label>
+          <select id="exportTrip"
+            style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid var(--line); border-radius:12px; font:inherit; background:var(--surface); color:var(--ink);"></select>
+        </div>
+      </div>
+
+      <div id="scope-project" style="display:none">
+        <div class="field">
+          <label>Projeto</label>
+          <select id="exportProject"
+            style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid var(--line); border-radius:12px; font:inherit; background:var(--surface); color:var(--ink);"></select>
         </div>
       </div>
 
@@ -1279,8 +1337,11 @@ function openNew() {
   document.getElementById('fMerchant').value = '';
   document.getElementById('fAmount').value = '';
   document.getElementById('fDate').value = todayISO();
+  document.getElementById('fTrip').value = '';
+  document.getElementById('fProject').value = '';
   document.getElementById('fNotes').value = '';
   document.getElementById('deleteBtn').style.display = 'none';
+  fillTagDatalists();
   resetPhotoArea();
   renderCatGrid();
   openModal('modalForm');
@@ -1580,6 +1641,8 @@ async function saveExpense() {
   const amount = parseFloat(document.getElementById('fAmount').value);
   const date = document.getElementById('fDate').value;
   const notes = document.getElementById('fNotes').value.trim();
+  const trip = document.getElementById('fTrip').value.trim();
+  const project = document.getElementById('fProject').value.trim();
 
   if (!merchant) { toast('Informe o estabelecimento', true); return; }
   if (isNaN(amount) || amount <= 0) { toast('Informe um valor válido', true); return; }
@@ -1588,7 +1651,7 @@ async function saveExpense() {
   const item = {
     id: editingId || uid(),
     userId: currentUser.id,
-    merchant, amount, date, notes,
+    merchant, amount, date, notes, trip, project,
     category: selectedCat,
     photo: currentPhoto,
     createdAt: editingId ? undefined : Date.now()
@@ -1625,6 +1688,8 @@ function openDetail(id) {
     <div class="detail-row"><span class="label">Estabelecimento</span><span class="value">${escapeHtml(e.merchant)}</span></div>
     <div class="detail-row"><span class="label">Categoria</span><span class="value">${cat.emoji} ${cat.name}</span></div>
     <div class="detail-row"><span class="label">Data</span><span class="value">${fmtDate(e.date)}</span></div>
+    ${e.trip ? `<div class="detail-row"><span class="label">Viagem</span><span class="value">${escapeHtml(e.trip)}</span></div>` : ''}
+    ${e.project ? `<div class="detail-row"><span class="label">Projeto</span><span class="value">${escapeHtml(e.project)}</span></div>` : ''}
     ${e.notes ? `<div class="detail-row"><span class="label">Observações</span><span class="value">${escapeHtml(e.notes)}</span></div>` : ''}
     <button class="btn-primary" style="margin-top: 24px;" onclick="closeModal('modalDetail'); editExpense('${e.id}')">Editar</button>
   `;
@@ -1641,8 +1706,11 @@ function editExpense(id) {
   document.getElementById('fMerchant').value = e.merchant || '';
   document.getElementById('fAmount').value = e.amount || '';
   document.getElementById('fDate').value = e.date || todayISO();
+  document.getElementById('fTrip').value = e.trip || '';
+  document.getElementById('fProject').value = e.project || '';
   document.getElementById('fNotes').value = e.notes || '';
   document.getElementById('deleteBtn').style.display = 'block';
+  fillTagDatalists();
   if (currentPhoto) showPhotoInArea(currentPhoto);
   else resetPhotoArea();
   renderCatGrid();
@@ -1650,29 +1718,132 @@ function editExpense(id) {
 }
 
 // ===== Export =====
+const MONTH_NAMES = ['janeiro','fevereiro','março','abril','maio','junho',
+  'julho','agosto','setembro','outubro','novembro','dezembro'];
+function monthName(m) { return MONTH_NAMES[(m - 1) % 12] || ''; }
+
+// Normaliza texto para uso em nome de arquivo (sem acento/espaço/símbolo).
+function slug(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+}
+
+// Valores distintos de um campo (viagem/projeto) nas despesas do usuário, ordenados.
+function distinctValues(field) {
+  const set = new Set();
+  for (const e of allExpenses) {
+    const v = (e[field] || '').trim();
+    if (v) set.add(v);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+// Abastece os <datalist> do formulário de despesa.
+function fillTagDatalists() {
+  const tl = document.getElementById('tripList');
+  const pl = document.getElementById('projectList');
+  if (tl) tl.innerHTML = distinctValues('trip').map(v => `<option value="${escapeHtml(v)}">`).join('');
+  if (pl) pl.innerHTML = distinctValues('project').map(v => `<option value="${escapeHtml(v)}">`).join('');
+}
+
+// Abastece os <select> de viagem/projeto/ano do modal de exportação.
+function fillExportSelects() {
+  const trips = distinctValues('trip');
+  const projects = distinctValues('project');
+  const ts = document.getElementById('exportTrip');
+  const ps = document.getElementById('exportProject');
+  const ys = document.getElementById('exportYear');
+  if (ts) ts.innerHTML = trips.length
+    ? trips.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')
+    : '<option value="">(nenhuma viagem cadastrada)</option>';
+  if (ps) ps.innerHTML = projects.length
+    ? projects.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')
+    : '<option value="">(nenhum projeto cadastrado)</option>';
+  if (ys) {
+    const years = new Set();
+    allExpenses.forEach(e => { if (e.date) years.add(e.date.slice(0, 4)); });
+    years.add(String(new Date().getFullYear()));
+    const arr = Array.from(years).sort((a, b) => b.localeCompare(a));
+    ys.innerHTML = arr.map(y => `<option value="${y}">${y}</option>`).join('');
+  }
+}
+
+function onScopeChange() {
+  const scope = document.getElementById('exportScope').value;
+  ['period', 'month', 'year', 'trip', 'project'].forEach(s => {
+    const el = document.getElementById('scope-' + s);
+    if (el) el.style.display = (s === scope) ? '' : 'none';
+  });
+}
+
 function openExport() {
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
   document.getElementById('exportFrom').value = first;
   document.getElementById('exportTo').value = last;
+  document.getElementById('exportMonth').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  document.getElementById('exportScope').value = 'period';
+  fillExportSelects();
+  onScopeChange();
   openModal('modalExport');
 }
 
+// Resolve o cenário selecionado em itens filtrados + rótulo + limites de data.
 function getExportRange() {
-  const from = document.getElementById('exportFrom').value;
-  const to = document.getElementById('exportTo').value;
-  const items = allExpenses
-    .filter(e => (!from || e.date >= from) && (!to || e.date <= to))
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return { from, to, items };
+  const scope = document.getElementById('exportScope').value;
+  let items = allExpenses.slice();
+  let from = '', to = '', scopeLabel = '', trip = '', project = '';
+
+  if (scope === 'month') {
+    const mv = document.getElementById('exportMonth').value;   // 'YYYY-MM'
+    if (mv) {
+      const [y, m] = mv.split('-').map(Number);
+      from = `${mv}-01`;
+      to = new Date(y, m, 0).toISOString().slice(0, 10);
+      scopeLabel = `Mês: ${monthName(m)}/${y}`;
+    } else {
+      scopeLabel = 'Mês: —';
+    }
+  } else if (scope === 'year') {
+    const yv = document.getElementById('exportYear').value;
+    if (yv) { from = `${yv}-01-01`; to = `${yv}-12-31`; scopeLabel = `Ano: ${yv}`; }
+    else { scopeLabel = 'Ano: —'; }
+  } else if (scope === 'trip') {
+    trip = document.getElementById('exportTrip').value;
+    scopeLabel = `Viagem: ${trip || '—'}`;
+  } else if (scope === 'project') {
+    project = document.getElementById('exportProject').value;
+    scopeLabel = `Projeto: ${project || '—'}`;
+  } else { // period
+    from = document.getElementById('exportFrom').value;
+    to = document.getElementById('exportTo').value;
+    scopeLabel = `Período: ${from ? fmtDate(from) : '—'} a ${to ? fmtDate(to) : '—'}`;
+  }
+
+  if (scope === 'trip') {
+    items = items.filter(e => (e.trip || '') === trip);
+  } else if (scope === 'project') {
+    items = items.filter(e => (e.project || '') === project);
+  } else {
+    items = items.filter(e => (!from || e.date >= from) && (!to || e.date <= to));
+  }
+  items.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Limites de data para nome de arquivo em viagem/projeto
+  if ((scope === 'trip' || scope === 'project') && items.length) {
+    from = items[0].date;
+    to = items[items.length - 1].date;
+  }
+
+  return { items, from, to, scope, scopeLabel, trip, project };
 }
 
 // Constrói o relatório em PDF e devolve { doc, from, to, items, total, fname, observacoes }.
 // Não salva nem fecha modal — quem chama decide (salvar, enviar, etc.). Retorna null se vazio.
 async function buildReportPDF() {
-  const { from, to, items } = getExportRange();
-  if (items.length === 0) { toast('Nenhuma despesa no período', true); return null; }
+  const { from, to, items, scope, scopeLabel, trip, project } = getExportRange();
+  if (items.length === 0) { toast('Nenhuma despesa para este relatório', true); return null; }
 
   const obsEl = document.getElementById('exportObs');
   const gestorEl = document.getElementById('exportGestor');
@@ -1697,7 +1868,7 @@ async function buildReportPDF() {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(120, 120, 120);
-  const periodTxt = `Período: ${from ? fmtDate(from) : '—'} a ${to ? fmtDate(to) : '—'}`;
+  const periodTxt = scopeLabel || `Período: ${from ? fmtDate(from) : '—'} a ${to ? fmtDate(to) : '—'}`;
   doc.text(periodTxt, pageW - margin, 26, { align: 'right' });
   const userTxt = currentUser ? (currentUser.email ? `${currentUser.name} • ${currentUser.email}` : currentUser.name) : '';
   if (userTxt) doc.text(userTxt, pageW - margin, 30, { align: 'right' });
@@ -1940,8 +2111,11 @@ async function buildReportPDF() {
   }
 
   const safeName = currentUser ? currentUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'mais';
-  const fname = `Despesas_${safeName}_${(from || 'inicio').replace(/-/g,'')}_${(to || 'fim').replace(/-/g,'')}.pdf`;
-  return { doc, from, to, items, total, fname, observacoes };
+  const tag = (scope === 'trip' && trip) ? '_viagem_' + slug(trip)
+            : (scope === 'project' && project) ? '_projeto_' + slug(project)
+            : '';
+  const fname = `Despesas_${safeName}${tag}_${(from || 'inicio').replace(/-/g,'')}_${(to || 'fim').replace(/-/g,'')}.pdf`;
+  return { doc, from, to, items, total, fname, observacoes, scope, scopeLabel, trip, project };
 }
 
 // Salva o PDF localmente (download)
@@ -1979,7 +2153,11 @@ async function sendForApproval() {
     filename: r.fname,
     requesterName: currentUser ? currentUser.name : '',
     requesterEmail: currentUser ? (currentUser.email || '') : '',
-    period: `${r.from ? fmtDate(r.from) : '—'} a ${r.to ? fmtDate(r.to) : '—'}`,
+    period: r.scopeLabel || `${r.from ? fmtDate(r.from) : '—'} a ${r.to ? fmtDate(r.to) : '—'}`,
+    scope: r.scope || '',
+    scopeLabel: r.scopeLabel || '',
+    trip: r.trip || '',
+    project: r.project || '',
     total: fmtMoney(r.total),
     count: r.items.length,
     observacoes: r.observacoes || ''
@@ -2010,20 +2188,21 @@ async function sendForApproval() {
 }
 
 async function exportExcel() {
-  const { from, to, items } = getExportRange();
-  if (items.length === 0) { toast('Nenhuma despesa no período', true); return; }
+  const { from, to, items, scope, scopeLabel, trip, project } = getExportRange();
+  if (items.length === 0) { toast('Nenhuma despesa para este relatório', true); return; }
 
   const total = items.reduce((s, e) => s + Number(e.amount), 0);
 
   // Aba 1: Despesas
   const userLine = currentUser ? `Usuário: ${currentUser.name}${currentUser.email ? ' (' + currentUser.email + ')' : ''}` : '';
+  const headLabel = scopeLabel || `Período: ${from ? fmtDate(from) : '—'} a ${to ? fmtDate(to) : '—'}`;
   const rows = [
     ['MAIS Soluções Industriais — Relatório de Despesas'],
-    [`Período: ${from ? fmtDate(from) : '—'} a ${to ? fmtDate(to) : '—'}`],
+    [headLabel],
     [userLine],
     [`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR').slice(0,5)}`],
     [],
-    ['Data', 'Estabelecimento', 'Categoria', 'Valor (R$)', 'Observações']
+    ['Data', 'Estabelecimento', 'Categoria', 'Valor (R$)', 'Viagem', 'Projeto', 'Observações']
   ];
   items.forEach(e => {
     rows.push([
@@ -2031,20 +2210,22 @@ async function exportExcel() {
       e.merchant || '',
       getCat(e.category).name,
       Number(e.amount),
+      e.trip || '',
+      e.project || '',
       e.notes || ''
     ]);
   });
   rows.push([]);
-  rows.push(['', '', 'TOTAL', total, '']);
+  rows.push(['', '', 'TOTAL', total, '', '', '']);
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 35 }, { wch: 16 }, { wch: 14 }, { wch: 30 }];
+  ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 30 }];
   // Merge título
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 4 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 4 } }
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } },
+    { s: { r: 3, c: 0 }, e: { r: 3, c: 6 } }
   ];
 
   // Aba 2: Resumo por categoria
@@ -2052,7 +2233,7 @@ async function exportExcel() {
   items.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + Number(e.amount); });
   const summary = [
     ['MAIS Soluções Industriais — Resumo por Categoria'],
-    [`Período: ${from ? fmtDate(from) : '—'} a ${to ? fmtDate(to) : '—'}`],
+    [headLabel],
     [userLine],
     [],
     ['Categoria', 'Valor (R$)', '% do Total']
@@ -2076,7 +2257,10 @@ async function exportExcel() {
   XLSX.utils.book_append_sheet(wb, ws2, 'Por Categoria');
 
   const safeName2 = currentUser ? currentUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'mais';
-  const fname = `Despesas_${safeName2}_${(from || 'inicio').replace(/-/g,'')}_${(to || 'fim').replace(/-/g,'')}.xlsx`;
+  const tag2 = (scope === 'trip' && trip) ? '_viagem_' + slug(trip)
+             : (scope === 'project' && project) ? '_projeto_' + slug(project)
+             : '';
+  const fname = `Despesas_${safeName2}${tag2}_${(from || 'inicio').replace(/-/g,'')}_${(to || 'fim').replace(/-/g,'')}.xlsx`;
   XLSX.writeFile(wb, fname);
   closeModal('modalExport');
   toast('Planilha gerada');
