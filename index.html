@@ -1041,8 +1041,13 @@ input[type="file"] { display: none; }
       </div>
 
       <div class="field">
-        <label>Nome do gestor (opcional, aparece na assinatura)</label>
-        <input type="text" id="exportGestor" placeholder="Ex.: Eduardo Maximiliano">
+        <label>Gestor para aprovação</label>
+        <select id="exportApprover"
+          style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid var(--line); border-radius:12px; font:inherit; background:var(--surface); color:var(--ink);">
+          <option value="">— selecione o gestor —</option>
+          <option value="eduardo@maisindustrial.com.br" data-name="Eduardo Maximiliano">Eduardo Maximiliano</option>
+          <option value="agnaldo@maisindustrial.com.br" data-name="Agnaldo Gomes">Agnaldo Gomes</option>
+        </select>
       </div>
 
       <div class="export-option" onclick="exportPDF()">
@@ -2124,9 +2129,14 @@ async function buildReportPDF() {
   if (items.length === 0) { toast('Nenhuma despesa para este relatório', true); return null; }
 
   const obsEl = document.getElementById('exportObs');
-  const gestorEl = document.getElementById('exportGestor');
+  const approverEl = document.getElementById('exportApprover');
   const observacoes = obsEl ? obsEl.value.trim() : '';
-  const gestorNome = gestorEl ? gestorEl.value.trim() : '';
+  let approverEmail = '', gestorNome = '';
+  if (approverEl && approverEl.value) {
+    approverEmail = approverEl.value;
+    const opt = approverEl.options[approverEl.selectedIndex];
+    gestorNome = (opt && opt.getAttribute('data-name')) || '';
+  }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -2393,7 +2403,7 @@ async function buildReportPDF() {
             : (scope === 'project' && project) ? '_projeto_' + slug(project)
             : '';
   const fname = `Despesas_${safeName}${tag}_${(from || 'inicio').replace(/-/g,'')}_${(to || 'fim').replace(/-/g,'')}.pdf`;
-  return { doc, from, to, items, total, fname, observacoes, scope, scopeLabel, trip, project };
+  return { doc, from, to, items, total, fname, observacoes, scope, scopeLabel, trip, project, approverEmail, approverName: gestorNome };
 }
 
 // Salva o PDF localmente (download)
@@ -2410,6 +2420,11 @@ async function sendForApproval() {
   const url = await dbGetConfig('approvalUrl');
   if (!url) {
     toast('Configure a URL de aprovação em Ajustes', true);
+    return;
+  }
+  const approverEl = document.getElementById('exportApprover');
+  if (!approverEl || !approverEl.value) {
+    toast('Selecione o gestor para aprovação', true);
     return;
   }
   const r = await buildReportPDF();
@@ -2438,7 +2453,9 @@ async function sendForApproval() {
     project: r.project || '',
     total: fmtMoney(r.total),
     count: r.items.length,
-    observacoes: r.observacoes || ''
+    observacoes: r.observacoes || '',
+    approverEmail: r.approverEmail || '',
+    approverName: r.approverName || ''
   };
 
   try {
